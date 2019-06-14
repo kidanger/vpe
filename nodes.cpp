@@ -561,7 +561,8 @@ void vpe_show()
         context = new RunContext();
     }
 
-    if (ImGui::Begin("ImNodes", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    if (ImGui::Begin("ImNodes", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+                     | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize))
     {
         // We probably need to keep some state, like positions of nodes/slots for rendering connections.
         ImNodes::BeginCanvas(gCanvas);
