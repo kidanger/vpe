@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include <regex>
+#include <cstdio>
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
 #include "ImNodes.h"
@@ -647,6 +648,104 @@ void vpe_show()
 
         if (!io.WantCaptureKeyboard && ImGui::IsKeyPressed(SDL_SCANCODE_P)) {
             context->Run();
+        }
+        if (!io.WantCaptureKeyboard && ImGui::IsKeyPressed(SDL_SCANCODE_S)) {
+            FILE* file = fopen("graph.vpe", "w");
+            if (!file)
+            {
+                perror("fopen");
+            }
+            auto getnodid = [&](void* nod){
+                int i = 0;
+                for (auto n : nodes)
+                {
+                    if (nod == n)
+                        return i;
+                    i++;
+                }
+                return -1;
+            };
+            for (int pass = 0; pass < 3; pass++)
+            for (auto n : nodes)
+            {
+                int id = getnodid(n);
+                if (pass == 0)
+                    fprintf(file, "%d %s\n", id, ((VPPOperator*) n)->command.c_str());
+                if (pass == 2)
+                    fprintf(file, "%d/%d,%d\n", id, (int) n->pos.x, (int) n->pos.y);
+                for (auto& c : n->connections)
+                {
+                    if (c.output_node != n)
+                        continue;
+                    if (pass == 1)
+                        fprintf(file, "%d:%s %d:%s\n", id, c.output_slot, getnodid(c.input_node), c.input_slot);
+                }
+            }
+            fclose(file);
+        }
+        if (!io.WantCaptureKeyboard && ImGui::IsKeyPressed(SDL_SCANCODE_L)) {
+            for (auto n : nodes)
+                delete n;
+            nodes.clear();
+            FILE* file = fopen("graph.vpe", "r");
+            if (!file)
+            {
+                perror("fopen");
+            }
+
+            // TODO: fix buffers and array (node id) overflows
+            std::map<int, BaseNode*> id2node;
+            char line[1024];
+            while (fgets(line, sizeof(line), file))
+            {
+                if (line[0] == '#')
+                    continue;
+
+                line[sizeof(line)-1] = 0;
+                line[strlen(line)-1] = 0;
+
+                int id;
+                char op;
+                if (sscanf(line, "%d%c", &id, &op) != 2)
+                    continue;
+
+                if (op == ' ')
+                {
+                    auto node = new VPPOperator();
+                    node->SetCommand(line + 2);
+                    nodes.push_back(node);
+                    id2node[id] = node;
+                }
+                else if (op == ':')
+                {
+                    char inputslot[64];
+                    char outputslot[64];
+                    int toid;
+                    if (sscanf(line + 2, "%s %d:%s", outputslot, &toid, inputslot) == 3)
+                    {
+                        Connection c;
+                        c.output_node = id2node[id];
+                        for (unsigned i = 0; i < sizeof(PipeOutputSlotNames)/sizeof(PipeOutputSlotNames[0]); i++)
+                            if (!strcmp(outputslot, PipeOutputSlotNames[i]))
+                                c.output_slot = PipeOutputSlotNames[i];
+                        c.input_node = id2node[toid];
+                        for (unsigned i = 0; i < sizeof(PipeInputSlotNames)/sizeof(PipeInputSlotNames[0]); i++)
+                            if (!strcmp(inputslot, PipeInputSlotNames[i]))
+                                c.input_slot = PipeInputSlotNames[i];
+                        ((BaseNode*) c.output_node)->connections.push_back(c);
+                        ((BaseNode*) c.input_node)->connections.push_back(c);
+                    }
+                }
+                else if (op == '/')
+                {
+                    auto node = id2node[id];
+                    int x, y;
+                    if (sscanf(line+2, "%d,%d", &x, &y) == 2)
+                        node->pos = ImVec2(x, y);
+                }
+                printf("%s\n", line);
+            }
+            fclose(file);
         }
 
         ImNodes::EndCanvas();
